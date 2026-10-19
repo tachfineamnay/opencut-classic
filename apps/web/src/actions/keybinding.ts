@@ -1,8 +1,11 @@
+
 import type { TActionWithOptionalArgs } from "./types";
 
 /**
  * Alt is also regarded as macOS OPTION (⌥) key
- * Ctrl is also regarded as macOS COMMAND (⌘) key (NOTE: this differs from HTML Keyboard spec where COMMAND is Meta key!)
+ * Ctrl is also regarded as macOS COMMAND (⌘) key
+ * (NOTE: this differs from HTML Keyboard spec
+ * where COMMAND is Meta key!)
  */
 export type ModifierKeys =
 	| "ctrl"
@@ -28,16 +31,83 @@ export type Key = (typeof KEYS)[number];
 
 const KEY_SET: ReadonlySet<string> = new Set(KEYS);
 
+/**
+ * Check whether a string is a valid keyboard key.
+ */
 export function isKey(value: string): value is Key {
 	return KEY_SET.has(value);
 }
 
-export type ModifierBasedShortcutKey = `${ModifierKeys}+${Key}`;
-// Singular keybindings (these will be disabled when an input-ish area has been focused)
+export type ModifierBasedShortcutKey =
+	`${ModifierKeys}+${Key}`;
+
+/**
+ * Singular keybindings are disabled when
+ * an input-like element has focus.
+ */
 export type SingleCharacterShortcutKey = `${Key}`;
 
-export type ShortcutKey = ModifierBasedShortcutKey | SingleCharacterShortcutKey;
+export type ShortcutKey =
+	| ModifierBasedShortcutKey
+	| SingleCharacterShortcutKey;
 
+/**
+ * Supported modifier combinations.
+ */
+const MODIFIER_KEY_SET: ReadonlySet<string> = new Set([
+	"ctrl",
+	"alt",
+	"shift",
+	"ctrl+shift",
+	"alt+shift",
+	"ctrl+alt",
+	"ctrl+alt+shift",
+]);
+
+/**
+ * Validate a keyboard shortcut.
+ *
+ * Examples:
+ * - "a"               => true
+ * - "ctrl+a"          => true
+ * - "ctrl+shift+a"    => true
+ * - "alt+shift+z"     => true
+ * - "ctrl+unknown"    => false
+ * - "invalid"         => false
+ *
+ * Acts as a TypeScript type guard so persisted
+ * and imported shortcuts can be validated safely.
+ */
+export function isShortcutKey(
+	value: string,
+): value is ShortcutKey {
+	// A single valid key is also a valid shortcut.
+	if (isKey(value)) {
+		return true;
+	}
+
+	const parts = value.split("+");
+
+	// Modified shortcuts require at least
+	// one modifier and one key.
+	if (parts.length < 2) {
+		return false;
+	}
+
+	const key = parts.pop();
+
+	if (key === undefined || !isKey(key)) {
+		return false;
+	}
+
+	const modifier = parts.join("+");
+
+	return MODIFIER_KEY_SET.has(modifier);
+}
+
+/**
+ * Configuration mapping shortcuts to actions.
+ */
 export type KeybindingConfig = {
 	[key in ShortcutKey]?: TActionWithOptionalArgs;
 };
