@@ -1,16 +1,25 @@
-# OpenCut Classic / Coolify - configuration de demarrage
-# Source: https://github.com/OpenCut-app/opencut-classic
-# Pour un fork Git, enregistrer ce contenu dans docker-compose.yml
+
+# OpenCut Classic / Coolify
+# Docker Compose - Production
+
 services:
+
+  # PostgreSQL - Internal database
   db:
     image: postgres:17
     restart: unless-stopped
+
+    labels:
+      - "traefik.enable=false"
+
     environment:
       POSTGRES_USER: opencut
       POSTGRES_PASSWORD: ${SERVICE_PASSWORD_64_POSTGRES}
       POSTGRES_DB: opencut
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opencut -d opencut"]
       interval: 30s
@@ -18,9 +27,14 @@ services:
       retries: 5
       start_period: 10s
 
+  # Redis - Internal cache
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+
+    labels:
+      - "traefik.enable=false"
+
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -28,53 +42,80 @@ services:
       retries: 5
       start_period: 10s
 
+  # Redis HTTP bridge - Internal only
   serverless-redis-http:
     image: hiett/serverless-redis-http:latest
     restart: unless-stopped
+
+    labels:
+      - "traefik.enable=false"
+
     environment:
       SRH_MODE: env
       SRH_TOKEN: ${SERVICE_HEX_64_REDISTOKEN}
       SRH_CONNECTION_STRING: redis://redis:6379
+
     depends_on:
       redis:
         condition: service_healthy
+
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:80 || exit 1"]
+      test:
+        - CMD-SHELL
+        - "wget --spider -q http://127.0.0.1:80 || exit 1"
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 10s
 
+  # OpenCut - Public web application
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+
       args:
         NEXT_PUBLIC_SITE_URL: ${OPENCUT_URL:?}
         NEXT_PUBLIC_MARBLE_API_URL: ${NEXT_PUBLIC_MARBLE_API_URL:-https://api.marblecms.com}
         MARBLE_WORKSPACE_KEY: ${MARBLE_WORKSPACE_KEY:-build-placeholder}
         FREESOUND_CLIENT_ID: ${FREESOUND_CLIENT_ID:-}
         FREESOUND_API_KEY: ${FREESOUND_API_KEY:-}
+
     restart: unless-stopped
+
+    # Internal port for Coolify / Traefik
+    expose:
+      - "3000"
+
     environment:
       NODE_ENV: production
+
       DATABASE_URL: postgresql://opencut:${SERVICE_PASSWORD_64_POSTGRES}@db:5432/opencut
+
       BETTER_AUTH_SECRET: ${SERVICE_HEX_64_AUTHSECRET}
       BETTER_AUTH_URL: ${OPENCUT_URL:?}
+
       UPSTASH_REDIS_REST_URL: http://serverless-redis-http:80
       UPSTASH_REDIS_REST_TOKEN: ${SERVICE_HEX_64_REDISTOKEN}
+
       NEXT_PUBLIC_SITE_URL: ${OPENCUT_URL:?}
       NEXT_PUBLIC_MARBLE_API_URL: ${NEXT_PUBLIC_MARBLE_API_URL:-https://api.marblecms.com}
+
       MARBLE_WORKSPACE_KEY: ${MARBLE_WORKSPACE_KEY:-placeholder}
+
       FREESOUND_CLIENT_ID: ${FREESOUND_CLIENT_ID:-}
       FREESOUND_API_KEY: ${FREESOUND_API_KEY:-}
+
     depends_on:
       db:
         condition: service_healthy
       serverless-redis-http:
         condition: service_healthy
+
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/api/health || exit 1"]
+      test:
+        - CMD-SHELL
+        - "curl -fsS http://127.0.0.1:3000/api/health || exit 1"
       interval: 30s
       timeout: 10s
       retries: 5
