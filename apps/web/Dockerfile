@@ -1,10 +1,12 @@
+
 FROM oven/bun:alpine AS base
 
+# Build stage
 FROM base AS builder
 
 WORKDIR /app
-ARG NEXT_PUBLIC_SITE_URL
 
+ARG NEXT_PUBLIC_SITE_URL
 ARG FREESOUND_CLIENT_ID
 ARG FREESOUND_API_KEY
 ARG NEXT_PUBLIC_MARBLE_API_URL=https://api.marblecms.com
@@ -22,11 +24,12 @@ COPY apps/web/ apps/web/
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build-time env stubs to pass zod validation
+# Build-time environment placeholders
 ENV DATABASE_URL="postgresql://opencut:opencut@localhost:5432/opencut"
 ENV BETTER_AUTH_SECRET="build-time-secret"
 ENV UPSTASH_REDIS_REST_URL="http://localhost:8079"
 ENV UPSTASH_REDIS_REST_TOKEN="example_token"
+
 ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_PUBLIC_MARBLE_API_URL=$NEXT_PUBLIC_MARBLE_API_URL
 ENV MARBLE_WORKSPACE_KEY=$MARBLE_WORKSPACE_KEY
@@ -35,14 +38,19 @@ ENV FREESOUND_CLIENT_ID=$FREESOUND_CLIENT_ID
 ENV FREESOUND_API_KEY=$FREESOUND_API_KEY
 
 WORKDIR /app/apps/web
+
 RUN bun run build
 
-# Production image
+# Production stage
 FROM base AS runner
+
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+
+# Required by the Docker Compose healthcheck
+RUN apk add --no-cache curl
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
