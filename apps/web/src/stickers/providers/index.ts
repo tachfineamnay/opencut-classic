@@ -1,3 +1,4 @@
+
 import { stickersRegistry } from "../registry";
 import type { StickerProvider } from "@/stickers/types";
 import { flagsProvider } from "./flags";
@@ -19,6 +20,10 @@ export function registerDefaultStickerProviders({
 		if (stickersRegistry.has(provider.id)) {
 			continue;
 		}
-		stickersRegistry.register(provider.id, provider);
+
+		stickersRegistry.register({
+			key: provider.id,
+			definition: provider,
+		});
 	}
 }
